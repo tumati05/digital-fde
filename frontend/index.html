@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Digital FDE</title>
+<style>
+  :root {
+    --bg:#f5f5f6; --surface:#ffffff; --line:#e1e1e4; --line-strong:#c9c9ce;
+    --ink:#1d1e21; --muted:#62646b; --faint:#9a9ca3;
+    --red:#c1121f; --red-deep:#8c0f19; --red-tint:#fbebec; --red-line:#f0c4c7;
+    --user:#2b2c30; --user-ink:#ffffff; --shadow:0 1px 2px rgba(20,20,24,.06), 0 8px 24px rgba(20,20,24,.06);
+    --sans:"Inter","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+  }
+  :root[data-theme="dark"] {
+    --bg:#141416; --surface:#1d1e21; --line:#2e2f34; --line-strong:#44454b;
+    --ink:#f1f1f2; --muted:#a4a6ad; --faint:#74767d;
+    --red:#e5484d; --red-deep:#ff8a8f; --red-tint:#2c1719; --red-line:#5a2427;
+    --user:#e9e9eb; --user-ink:#1d1e21; --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#141416; --surface:#1d1e21; --line:#2e2f34; --line-strong:#44454b;
+      --ink:#f1f1f2; --muted:#a4a6ad; --faint:#74767d;
+      --red:#e5484d; --red-deep:#ff8a8f; --red-tint:#2c1719; --red-line:#5a2427;
+      --user:#e9e9eb; --user-ink:#1d1e21; --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  * { box-sizing:border-box; }
+  html, body { height:100%; }
+  body { margin:0; background:var(--bg); color:var(--ink); font:15px/1.55 var(--sans); -webkit-font-smoothing:antialiased; }
+  button { font:inherit; color:inherit; }
+  :focus-visible { outline:2px solid var(--red); outline-offset:2px; }
+
+  .app { height:100%; display:grid; grid-template-columns:minmax(0,1fr) 340px; }
+  .chat { display:flex; flex-direction:column; min-width:0; height:100%; }
+
+  header { display:flex; align-items:center; gap:12px; padding:14px 24px; background:var(--surface); border-bottom:1px solid var(--line); }
+  .mark { width:30px; height:30px; border-radius:8px; background:var(--red); color:#fff; display:grid; place-items:center; font-weight:700; font-size:13px; letter-spacing:.02em; }
+  header h1 { margin:0; font-size:16px; font-weight:650; }
+  header p { margin:0; font-size:13px; color:var(--muted); }
+  header .grow { flex:1; }
+  .ghost { background:none; border:1px solid var(--line-strong); border-radius:8px; padding:7px 12px; cursor:pointer; color:var(--muted); font-size:13px; }
+  .ghost:hover { color:var(--ink); border-color:var(--muted); }
+  #panelToggle { display:none; }
+
+  #log { flex:1; overflow-y:auto; padding:28px 24px 12px; scroll-behavior:smooth; }
+  .lane { max-width:720px; margin:0 auto; display:flex; flex-direction:column; gap:22px; }
+  .msg { display:flex; gap:12px; align-items:flex-start; }
+  .msg .avatar { flex:none; width:30px; height:30px; border-radius:8px; background:var(--red); color:#fff; display:grid; place-items:center; font-size:12px; font-weight:700; }
+  .msg .body { min-width:0; max-width:calc(100% - 42px); }
+  .msg .text { white-space:pre-wrap; overflow-wrap:anywhere; }
+  .msg.user { justify-content:flex-end; }
+  .msg.user .body { max-width:82%; }
+  .msg.user .text { background:var(--user); color:var(--user-ink); padding:10px 14px; border-radius:14px 14px 4px 14px; }
+  .msg.err .text { color:var(--red-deep); }
+  .retry { margin-top:8px; }
+  .notice { margin-top:6px; color:var(--muted); font-size:13px; }
+
+  .chips { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+  .chip { background:var(--surface); border:1px solid var(--line-strong); border-radius:999px; padding:8px 14px; cursor:pointer; font-size:14px; text-align:left; }
+  .chip:hover { border-color:var(--red); color:var(--red-deep); }
+
+  .manual { margin-top:12px; display:flex; align-items:center; gap:14px; padding:14px 16px; background:var(--surface); border:1px solid var(--line); border-left:4px solid var(--red); border-radius:10px; box-shadow:var(--shadow); }
+  .manual .doc { flex:none; width:34px; height:42px; border:1.5px solid var(--red); border-radius:4px; position:relative; }
+  .manual .doc::before, .manual .doc::after { content:""; position:absolute; left:6px; right:6px; height:2px; background:var(--red); opacity:.6; }
+  .manual .doc::before { top:12px; } .manual .doc::after { top:19px; }
+  .manual strong { display:block; font-weight:600; overflow-wrap:anywhere; }
+  .manual span { color:var(--muted); font-size:13px; }
+  .manual a { margin-left:auto; flex:none; background:var(--red); color:#fff; text-decoration:none; padding:9px 14px; border-radius:8px; font-weight:600; font-size:14px; }
+  .manual a:hover { background:var(--red-deep); }
+  :root[data-theme="dark"] .manual a { color:#1d1e21; }
+
+  .bp { margin-top:12px; background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .bp h3 { margin:0 0 8px; font-size:14px; font-weight:650; }
+  .bp ol { margin:0; padding-left:20px; }
+  .bp li { padding:3px 0; font-size:14px; }
+  .bp li span { color:var(--muted); }
+  .bp li b { font-weight:600; }
+  .bp .rev { margin-left:6px; font-size:12px; color:var(--red-deep); border:1px solid var(--red-line); background:var(--red-tint); border-radius:99px; padding:1px 8px; white-space:nowrap; }
+  .thinking { display:flex; align-items:center; gap:10px; color:var(--muted); }
+  .dots { display:inline-flex; gap:4px; }
+  .dots i { width:6px; height:6px; border-radius:50%; background:var(--red); opacity:.35; animation:pulse 1.1s infinite ease-in-out; }
+  .dots i:nth-child(2) { animation-delay:.15s; } .dots i:nth-child(3) { animation-delay:.3s; }
+  @keyframes pulse { 0%, 80%, 100% { opacity:.25; } 40% { opacity:1; } }
+
+  .composer { padding:12px 24px 22px; background:linear-gradient(to top, var(--bg) 70%, transparent); }
+  .box { max-width:720px; margin:0 auto; background:var(--surface); border:1px solid var(--line-strong); border-radius:14px; box-shadow:var(--shadow); padding:10px 10px 8px 14px; }
+  .box:focus-within { border-color:var(--red); }
+  textarea { width:100%; border:0; outline:0; resize:none; background:transparent; color:var(--ink); font:inherit; max-height:180px; min-height:26px; padding:4px 0; }
+  textarea::placeholder { color:var(--faint); }
+  .tools { display:flex; align-items:center; gap:8px; margin-top:6px; }
+  .tools .count { margin-left:auto; color:var(--faint); font-size:12px; }
+  .link { background:none; border:0; padding:6px 8px; border-radius:8px; color:var(--muted); cursor:pointer; font-size:13px; }
+  .link:hover { background:var(--bg); color:var(--ink); }
+  #fileRow { display:none; margin-top:6px; }
+  #fileRow input { width:100%; border:1px solid var(--line-strong); border-radius:8px; padding:8px 10px; background:var(--bg); color:var(--ink); font:inherit; font-size:13px; }
+  #fileRow small { color:var(--muted); }
+  .send { background:var(--red); color:#fff; border:0; border-radius:9px; padding:8px 16px; font-weight:600; cursor:pointer; }
+  .send:hover:not(:disabled) { background:var(--red-deep); }
+  .send:disabled { opacity:.45; cursor:not-allowed; }
+  :root[data-theme="dark"] .send { color:#1d1e21; }
+  .fine { max-width:720px; margin:8px auto 0; color:var(--faint); font-size:12px; text-align:center; }
+
+  /* Understanding panel */
+  aside { background:var(--surface); border-left:1px solid var(--line); overflow-y:auto; padding:22px 20px 28px; }
+  aside h2 { margin:0 0 4px; font-size:14px; font-weight:650; }
+  aside .sub { margin:0 0 14px; color:var(--muted); font-size:13px; }
+  .bar { height:6px; background:var(--line); border-radius:99px; overflow:hidden; }
+  .bar > div { height:100%; width:0; background:var(--red); border-radius:99px; transition:width .5s ease; }
+  .pct { display:flex; justify-content:space-between; margin:8px 0 18px; font-size:13px; color:var(--muted); }
+  .pct b { color:var(--ink); font-weight:650; }
+  ul.areas { list-style:none; padding:0; margin:0 0 20px; }
+  ul.areas li { display:flex; gap:10px; padding:9px 0; border-top:1px solid var(--line); }
+  ul.areas li:first-child { border-top:0; }
+  .dot { flex:none; width:10px; height:10px; margin-top:6px; border-radius:50%; border:2px solid var(--line-strong); }
+  .dot.FACT { background:var(--red); border-color:var(--red); }
+  .dot.INFERENCE { background:var(--red-line); border-color:var(--red); }
+  .dot.ASSUMPTION { border-color:var(--red); border-style:dashed; }
+  .area-name { font-size:14px; font-weight:550; }
+  .area-name em { font-style:normal; font-weight:500; color:var(--faint); font-size:12px; margin-left:6px; }
+  .area-val { color:var(--muted); font-size:13px; overflow-wrap:anywhere; }
+  .est { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:16px; }
+  .est b { font-size:18px; font-weight:650; }
+  .est p { margin:4px 0 0; color:var(--muted); font-size:12px; }
+  .make { width:100%; background:var(--surface); color:var(--red-deep); border:1.5px solid var(--red); border-radius:10px; padding:11px 14px; font-weight:650; cursor:pointer; }
+  .make:hover:not(:disabled) { background:var(--red-tint); }
+  .make.ready { background:var(--red); color:#fff; }
+  .make.ready:hover:not(:disabled) { background:var(--red-deep); }
+  :root[data-theme="dark"] .make.ready { color:#1d1e21; }
+  .make:disabled { opacity:.45; cursor:not-allowed; }
+  .legend { margin-top:14px; color:var(--faint); font-size:12px; }
+
+  .read { background:var(--bg); border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:16px; }
+  .read h3 { margin:0 0 6px; font-size:13px; font-weight:650; }
+  .read .verdict { display:inline-block; font-weight:650; font-size:14px; padding:2px 10px; border-radius:99px; border:1px solid var(--red-line); background:var(--red-tint); color:var(--red-deep); }
+  .read .verdict.good { background:transparent; border-color:var(--line-strong); color:var(--ink); }
+  .read h4 { margin:10px 0 2px; font-size:12px; font-weight:650; color:var(--muted); }
+  .read ul { margin:0; padding-left:18px; font-size:13px; color:var(--ink); }
+  .keytag { color:var(--faint); font-size:11px; margin-left:6px; }
+  .warn { margin-top:8px; padding:8px 10px; border:1px solid var(--red-line); background:var(--red-tint); border-radius:8px; font-size:13px; color:var(--ink); }
+  .confirm { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .send.stop { background:var(--surface); color:var(--red-deep); border:1.5px solid var(--red); }
+  :root[data-theme="dark"] .send.stop { color:var(--red); }
+  @media (max-width:900px) {
+    .app { grid-template-columns:minmax(0,1fr); }
+    aside { position:fixed; inset:0 0 0 auto; width:min(340px, 92vw); transform:translateX(100%); transition:transform .25s ease; z-index:5; box-shadow:var(--shadow); }
+    body.panel-open aside { transform:none; }
+    #panelToggle { display:inline-block; }
+    header, #log, .composer { padding-left:16px; padding-right:16px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .dots i { animation:none; opacity:.7; } .bar > div, aside { transition:none; } #log { scroll-behavior:auto; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <section class="chat" aria-label="Conversation">
+    <header>
+      <div class="mark" aria-hidden="true">FDE</div>
+      <div><h1>Digital FDE</h1><p>Scopes client problems and writes the solution manual</p></div>
+      <div class="grow"></div>
+      <button class="ghost" id="panelToggle" type="button">Progress</button>
+      <button class="ghost" id="theme" type="button" aria-label="Switch between light and dark mode">Dark mode</button>
+      <button class="ghost" id="reset" type="button">New conversation</button>
+    </header>
+
+    <div id="log" aria-live="polite"><div class="lane" id="lane"></div></div>
+
+    <div class="composer">
+      <form class="box" id="form" autocomplete="off">
+        <textarea id="input" rows="1" maxlength="2000" placeholder="Describe what the client is asking for" aria-label="Your message"></textarea>
+        <div id="fileRow">
+          <input id="fileUrl" type="url" placeholder="https://" aria-label="Sample file link">
+          <small>A public https link to a CSV, Excel, PDF, Word or text file.</small>
+        </div>
+        <div class="tools">
+          <button class="link" id="fileBtn" type="button">Add a sample file link</button>
+          <span class="count"><span id="count">0</span>/2000</span>
+          <button class="send" id="send" type="submit" disabled>Send</button>
+        </div>
+      </form>
+      <p class="fine">Replies come from the Digital FDE agent. A person should review the manual before it is used.</p>
+    </div>
+  </section>
+
+  <aside aria-label="What the digital FDE understands">
+    <h2>What I understand so far</h2>
+    <p class="sub" id="panelSub">Nothing yet. Tell me about the client's problem.</p>
+    <div class="bar"><div id="barFill"></div></div>
+    <div class="pct"><span>Key areas confirmed</span><b id="pct">0 of 8</b></div>
+    <ul class="areas" id="areas"></ul>
+    <div class="read" id="read" hidden></div>
+    <div class="est" id="est" hidden><b id="estHours"></b><p id="estBasis"></p></div>
+    <button class="make" id="make" type="button" disabled>Create the manual</button>
+    <p class="legend">Filled dot: stated by you. Light dot: inferred. Dashed: assumed, needs confirming.</p>
+  </aside>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const safeUrl = u => /^https:\/\/[^\s"'<>]+$/i.test(String(u || '')) ? u : '';
+const GREETING = "Hi, I'm your digital FDE. Tell me what the client is trying to solve and I'll help you scope it. I'll ask a few questions, tell you honestly whether it's worth building, and write the manual when you're ready.";
+const STARTERS = [
+  'A client wants to automate invoice processing',
+  'Their onboarding takes weeks and they want it faster',
+  'They want to cut the time spent on monthly reports'
+];
+const AREAS = [['business_goal','Business goal'],['current_process','Current process'],['systems_involved','Systems involved'],['volume_per_day','Volume'],['exception_handling','Exceptions'],['security_compliance','Security and compliance'],['success_metrics','Success measures'],['stakeholders_approvers','Approvers'],['users_and_roles','Users and roles'],['data_sources_and_formats','Data and documents'],['integrations_required','Integrations'],['timeline_constraints','Timeline and constraints']];
+const WORDS = {FACT:'stated', INFERENCE:'inferred', ASSUMPTION:'assumed'};
+const VERDICTS = {BUILD:['Worth building', true], NOT_YET:['Not yet', false], DONT_BUILD:['Do not build', false], UNSURE:['Too early to say', true]};
+const ERRORS = {
+  agent_out_of_credits: 'The agent has no credits left right now. Add credits on the Supervity account, then retry.',
+  not_configured: 'This server is not set up yet. Set SUPERVITY_TOKEN and WORKFLOW_ID, then retry.',
+  agent_timeout: 'The agent took too long. Retry, or send a shorter message.',
+  agent_auth_failed: 'The agent rejected this server\'s token. Replace SUPERVITY_TOKEN, then retry.',
+  rate_limited: 'Too many messages in a short time. Wait a moment, then retry.'
+};
+
+let S = { state:null, turns:[], phase:'start', busy:false, last:null, ctrl:null, areas:[], keyConfirmed:0, keyTotal:8, fit:null, estimate:null };
+try { const saved = JSON.parse(sessionStorage.getItem('fde') || 'null'); if (saved && saved.turns) S = { ...S, ...saved, busy:false, last:null, ctrl:null }; } catch (e) {}
+const save = () => { try { sessionStorage.setItem('fde', JSON.stringify({ state:S.state, turns:S.turns.slice(-6), phase:S.phase, areas:S.areas, keyConfirmed:S.keyConfirmed, keyTotal:S.keyTotal, fit:S.fit, estimate:S.estimate })); } catch (e) {} };
+
+const lane = $('lane'), log = $('log'), input = $('input');
+const toBottom = () => { log.scrollTop = log.scrollHeight; };
+
+function addMsg(role, text, extra) {
+  const el = document.createElement('div');
+  el.className = 'msg ' + (role === 'user' ? 'user' : role === 'err' ? 'agent err' : 'agent');
+  el.innerHTML = (role === 'user' ? '' : '<div class="avatar" aria-hidden="true">FDE</div>') + '<div class="body"><div class="text">' + esc(text) + '</div></div>';
+  lane.appendChild(el);
+  if (extra) extra(el.querySelector('.body'));
+  toBottom();
+  return el;
+}
+
+function greet(chips = true) {
+  addMsg('agent', GREETING, body => {
+    if (!chips) return;
+    const c = document.createElement('div'); c.className = 'chips';
+    STARTERS.forEach(t => {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'chip'; b.textContent = t;
+      b.onclick = () => { c.remove(); turn({ action:'chat', message:t }, t); };
+      c.appendChild(b);
+    });
+    body.appendChild(c);
+  });
+}
+
+function renderPanel() {
+  const kc = S.keyConfirmed || 0, kt = S.keyTotal || 8;
+  $('barFill').style.width = Math.round(100 * kc / kt) + '%';
+  $('pct').textContent = kc + ' of ' + kt;
+  const byKey = {}; (S.areas || []).forEach(a => byKey[a.key] = a);
+  const crit = new Set((S.areas || []).filter(a => a.critical).map(a => a.key));
+  $('areas').innerHTML = AREAS.map(([k, label]) => {
+    const a = byKey[k] || { status:'UNKNOWN', value:'' };
+    const tag = WORDS[a.status] ? '<em>' + WORDS[a.status] + '</em>' : '';
+    const key = crit.has(k) ? '<span class="keytag">key</span>' : '';
+    return '<li><span class="dot ' + esc(a.status) + '"></span><div><div class="area-name">' + esc(label) + tag + key + '</div>' + (a.value ? '<div class="area-val">' + esc(a.value) + '</div>' : '') + '</div></li>';
+  }).join('');
+  const known = (S.areas || []).filter(a => a.status !== 'UNKNOWN').length;
+  $('panelSub').textContent = known ? known + ' of ' + AREAS.length + ' areas covered. Key areas are what I need before I can advise.' : "Nothing yet. Tell me about the client's problem.";
+
+  const f = S.fit, rd = $('read');
+  if (f && (f.verdict !== 'UNSURE' || (f.kill_risks || []).length || (f.ask_to_see || []).length)) {
+    const v = VERDICTS[f.verdict] || VERDICTS.UNSURE;
+    const list = (title, items) => (items && items.length) ? '<h4>' + title + '</h4><ul>' + items.map(i => '<li>' + esc(i) + '</li>').join('') + '</ul>' : '';
+    rd.hidden = false;
+    rd.innerHTML = '<h3>My read so far</h3><span class="verdict ' + (v[1] ? 'good' : '') + '">' + esc(v[0]) + '</span>' + list('Why', f.reasons) + list('Who could stop it', f.kill_risks) + list('Look at first', f.ask_to_see);
+  } else { rd.hidden = true; }
+
+  if (S.estimate && kc >= 6) {
+    $('est').hidden = false; $('estHours').textContent = S.estimate.low_hours + ' to ' + S.estimate.high_hours + ' hours';
+    $('estBasis').textContent = S.estimate.calibrated ? 'Indicative effort from your rate card.' : 'Placeholder estimate. It uses a starter rate card, not your delivery history.';
+  } else { $('est').hidden = true; }
+
+  const m = $('make'), ready = ['propose', 'advise', 'manual'].includes(S.phase);
+  m.disabled = S.busy || !S.turns.length;
+  m.classList.toggle('ready', S.phase === 'propose' || S.phase === 'advise');
+  m.textContent = ready ? (S.phase === 'advise' ? 'Write up my recommendation' : 'Create the manual') : 'Create a draft manual';
+}
+
+function setBusy(b) {
+  S.busy = b;
+  const send = $('send');
+  send.textContent = b ? 'Stop' : 'Send';
+  send.classList.toggle('stop', b);
+  send.type = b ? 'button' : 'submit';
+  send.disabled = b ? false : !input.value.trim();
+  renderPanel();
+}
+
+function thinking(manual) {
+  const el = document.createElement('div'); el.className = 'msg agent';
+  el.innerHTML = '<div class="avatar" aria-hidden="true">FDE</div><div class="body"><div class="thinking"><span class="dots"><i></i><i></i><i></i></span><span id="thinkText"></span></div></div>';
+  lane.appendChild(el); toBottom();
+  const t0 = Date.now();
+  const tick = () => { const x = $('thinkText'); if (x) x.textContent = (manual ? 'Writing the manual' : 'Thinking it through') + ' · ' + Math.round((Date.now() - t0) / 1000) + 's'; };
+  tick(); const id = setInterval(tick, 1000);
+  return { el, stop: () => { clearInterval(id); el.remove(); } };
+}
+
+async function turn(payload, shown) {
+  if (S.busy) return;
+  const isManual = payload.action === 'manual';
+  if (shown) addMsg('user', shown);
+  const ctrl = new AbortController(); S.ctrl = ctrl;
+  setBusy(true);
+  const t = thinking(isManual);
+  S.last = { payload, shown };
+  try {
+    const body = { ...payload, state: S.state, recent_turns: S.turns.slice(-6) };
+    const r = await fetch('/api/chat', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify(body), signal:ctrl.signal });
+    const data = await r.json().catch(() => ({}));
+    t.stop();
+    if (!r.ok) {
+      const e = data.error || {};
+      showError(ERRORS[e.code] || e.message || 'Something went wrong.'); return;
+    }
+    const x = data.response;
+    if (x.state) S.state = x.state;
+    S.phase = x.phase; S.areas = x.areas; S.keyConfirmed = x.key_confirmed; S.keyTotal = x.key_total || 8; S.fit = x.fit; S.estimate = x.estimate;
+    if (shown) S.turns.push({ role:'user', text:shown });
+    S.turns.push({ role:'assistant', text:x.reply });
+    S.turns = S.turns.slice(-6);
+    addMsg('agent', x.reply, body => {
+      const note = (txt, cls) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; body.appendChild(d); };
+      (x.notices || []).filter(n => !/^Read the attached/.test(n)).forEach(n => note(n, 'notice'));
+      const w = x.warnings || [];
+      if (w.includes('agent_version_mismatch')) note('The published agent is a different version from this app. Replies may behave unexpectedly until they are brought back in sync.', 'warn');
+      if (w.includes('state_missing')) note('The agent did not return its notes for this turn, so it may forget earlier answers.', 'warn');
+      if (w.includes('manual_link_rejected')) note('The manual was created, but its download link was not safe to show.', 'warn');
+      const link = x.manual && safeUrl(x.manual.url);
+      if (link) {
+        const c = document.createElement('div'); c.className = 'manual';
+        c.innerHTML = '<div class="doc" aria-hidden="true"></div><div><strong>' + esc(x.manual.title) + '</strong><span>Word document</span></div><a href="' + esc(link) + '" target="_blank" rel="noopener noreferrer">Download</a>';
+        body.appendChild(c);
+        if (x.manual.blueprint && x.manual.blueprint.length) {
+          const bp = document.createElement('div'); bp.className = 'bp';
+          bp.innerHTML = '<h3>Blueprint of the Auto I would build</h3><ol>' + x.manual.blueprint.map(b => '<li><b>' + esc(b.step) + '</b> <span>' + esc(b.does) + ' (' + esc(b.worker) + ')</span>' + (b.review ? '<span class="rev">Person approves</span>' : '') + '</li>').join('') + '</ol>';
+          body.appendChild(bp);
+        }
+      }
+    });
+    save();
+  } catch (e) {
+    t.stop();
+    if (e.name === 'AbortError') {
+      addMsg('agent', 'Stopped. Send your message again when you are ready.');
+    } else {
+      showError('Could not reach the server. Check your connection and retry.');
+    }
+  } finally {
+    S.ctrl = null; setBusy(false); renderPanel();
+  }
+}
+
+function showError(msg) {
+  addMsg('err', msg, body => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'ghost retry'; b.textContent = 'Retry';
+    b.onclick = () => { b.closest('.msg').remove(); if (S.last) turn(S.last.payload, null); };
+    body.appendChild(b);
+  });
+}
+
+function grow() { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 180) + 'px'; $('count').textContent = input.value.length; if (!S.busy) $('send').disabled = !input.value.trim(); }
+input.addEventListener('input', grow);
+input.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); if (!S.busy) $('form').requestSubmit(); } });
+
+$('send').addEventListener('click', () => { if (S.busy && S.ctrl) S.ctrl.abort(); });
+$('form').addEventListener('submit', e => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text || S.busy) return;
+  const url = $('fileUrl').value.trim();
+  if (url && !/^https:\/\//i.test(url)) { addMsg('err', 'The sample file link has to start with https://'); return; }
+  input.value = ''; grow();
+  const payload = { action:'chat', message:text };
+  if (url) { payload.sample_file_url = url; $('fileUrl').value = ''; $('fileRow').style.display = 'none'; $('fileBtn').textContent = 'Add a sample file link'; }
+  turn(payload, text);
+});
+
+$('fileBtn').onclick = () => { const r = $('fileRow'); const open = r.style.display !== 'block'; r.style.display = open ? 'block' : 'none'; $('fileBtn').textContent = open ? 'Remove sample file link' : 'Add a sample file link'; if (open) $('fileUrl').focus(); else $('fileUrl').value = ''; };
+
+function askBeforeDraft() {
+  const kc = S.keyConfirmed || 0, kt = S.keyTotal || 8;
+  addMsg('agent', 'I have only ' + kc + ' of ' + kt + ' key areas confirmed, so the manual would be a thin draft full of open questions. I would rather keep asking. Do you still want a draft now?', body => {
+    const row = document.createElement('div'); row.className = 'confirm';
+    const yes = document.createElement('button'); yes.type = 'button'; yes.className = 'ghost'; yes.textContent = 'Create the draft anyway';
+    const no = document.createElement('button'); no.type = 'button'; no.className = 'ghost'; no.textContent = 'Keep talking';
+    const close = () => row.remove();
+    yes.onclick = () => { close(); turn({ action:'manual', message:'Please create the manual.' }, 'Create the draft anyway'); };
+    no.onclick = () => { close(); input.focus(); };
+    row.append(yes, no); body.appendChild(row);
+  });
+}
+$('make').onclick = () => {
+  if (S.busy) return;
+  if (['propose', 'advise', 'manual'].includes(S.phase)) turn({ action:'manual', message:'Please create the manual.' }, 'Create the manual');
+  else askBeforeDraft();
+};
+$('panelToggle').onclick = () => document.body.classList.toggle('panel-open');
+log.addEventListener('click', () => document.body.classList.remove('panel-open'));
+$('reset').onclick = () => { if (S.busy) return; S = { state:null, turns:[], phase:'start', busy:false, last:null, ctrl:null, areas:[], keyConfirmed:0, keyTotal:8, fit:null, estimate:null }; try { sessionStorage.removeItem('fde'); } catch (e) {} lane.innerHTML = ''; greet(); renderPanel(); input.focus(); };
+
+function applyTheme(t) {
+  if (t) document.documentElement.setAttribute('data-theme', t); else document.documentElement.removeAttribute('data-theme');
+  const dark = t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  $('theme').textContent = dark ? 'Light mode' : 'Dark mode';
+}
+let savedTheme = null; try { savedTheme = localStorage.getItem('fde-theme'); } catch (e) {}
+applyTheme(savedTheme === 'dark' || savedTheme === 'light' ? savedTheme : null);
+$('theme').onclick = () => {
+  const cur = document.documentElement.getAttribute('data-theme');
+  const dark = cur ? cur === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+  const next = dark ? 'light' : 'dark'; applyTheme(next);
+  try { localStorage.setItem('fde-theme', next); } catch (e) {}
+};
+
+greet(!S.turns.length);
+if (S.turns.length) { S.turns.forEach(t => addMsg(t.role === 'user' ? 'user' : 'agent', t.text)); }
+renderPanel(); grow();
+</script>
+</body>
+</html>
